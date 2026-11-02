@@ -1,0 +1,46 @@
+# Production stack for a single server (VPS).
+#
+# Prerequisites: copy config/.env.example to config/.env and fill it in
+# (see DEPLOY.md). The API is bound to 127.0.0.1 only, so a reverse proxy
+# such as Caddy or nginx on the same host terminates HTTPS in front of it.
+
+services:
+  mongodb:
+    image: mongo:6.0
+    restart: unless-stopped
+    # Reads MONGO_INITDB_ROOT_USERNAME / MONGO_INITDB_ROOT_PASSWORD.
+    env_file:
+      - ./config/.env
+    volumes:
+      - data:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "db.adminCommand('ping').ok"
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+    restart: unless-stopped
+    # The image's default command is nodemon; production runs node directly.
+    command: npm start
+    env_file:
+      - ./config/.env
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - uploads:/app/public/uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  data:
+  uploads:
